@@ -1,0 +1,12 @@
+# For more info, see:
+# - https://joelpurra.com/projects/loopia-api-dyndns/
+# - https://support.loopia.se/wiki/uppdatera-dynamisk-ip-adress-med-loopiaapi/
+services:
+  loopia-dyndns:
+    build: .
+    environment:
+      LOOPIA_API_USERNAME: sample@loopiaapi
+      LOOPIA_API_PASSWORD: sample_pw
+      LOOPIA_DOMAIN: sampledomain.se
+      LOOPIA_SUBDOMAIN: sub.sampledomain.se # '@' for root
+    restart: unless-stopped
