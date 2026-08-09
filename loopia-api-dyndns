@@ -11,15 +11,17 @@ https://support.loopia.se/wiki/uppdatera-dynamisk-ip-adress-med-loopiaapi/
 
 import ipaddress
 import os
-import sys
+import logging
 import urllib.request
 import xmlrpc.client
 import time
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
-def print_error(msg):
-    print(msg, file=sys.stderr)
-
+logger = logging.getLogger(__name__)
 
 class Config:
     try:
@@ -27,8 +29,9 @@ class Config:
         password = os.environ["LOOPIA_API_PASSWORD"]
         domain = os.environ["LOOPIA_DOMAIN"]
         subdomain = os.environ["LOOPIA_SUBDOMAIN"]
+        ip6_enable = os.environ.get("LOOPIA_IP6_ENABLE", "False").lower() == "true"
     except KeyError as exception:
-        print_error(
+        logger.error(
             "Could not read configuration from environment variable: {exception}".format(
                 exception=exception,
             )
@@ -43,24 +46,22 @@ class Config:
 
 
 def api_error(exception):
-    print_error(
+    logger.error(
         "Request to Loopia API failed: {exception}".format(
             exception=exception,
         )
     )
-    quit(2)
 
 
 def get_string_value_from_url(url, max=None):
     try:
         return urllib.request.urlopen(url).read(max).decode("utf-8").strip()
     except:
-        print_error(
-            "Could not get string from url: {url}".format(
+        logger.error(
+            "Could not get IP from url: {url}".format(
                 url=url,
             )
         )
-        quit(5)
 
 
 def get_public_ipv4():
@@ -68,12 +69,11 @@ def get_public_ipv4():
     try:
         return str(ipaddress.IPv4Address(ipv4str_from_url))
     except:
-        print_error(
+        logger.error(
             "Could not parse IPv4 address: {ipv4str}".format(
                 ipv4str_from_url=ipv4str_from_url,
             )
         )
-        quit(7)
 
 
 def get_public_ipv6():
@@ -81,12 +81,11 @@ def get_public_ipv6():
     try:
         return str(ipaddress.IPv6Address(ipv6str_from_url))
     except:
-        print_error(
+        logger.error(
             "Could not parse IPv6 address: {ipv6str}".format(
                 ipv6str_from_url=ipv6str_from_url,
             )
         )
-        quit(8)
 
 
 def get_records(recordType):
@@ -105,6 +104,8 @@ def get_records(recordType):
 
 
 def update_record(value, record):
+    status = "No change"
+
     # Does the record need updating?
     if record["rdata"] != value:
         # Setting record_id updates an existing record.
@@ -126,11 +127,8 @@ def update_record(value, record):
             )
         except Exception as exception:
             api_error(exception)
-            status = "No change"
-    else:
-        status = "No change"
 
-    print(
+    logger.info(
         "{fqdn} {recordType}: {status} ({value})".format(
             fqdn=Config.fqdn,
             recordType=record["type"],
@@ -146,14 +144,13 @@ def check_and_update_record(recordType, value):
     recordCount = len(records)
 
     if recordCount != 1:
-        print_error(
+        logger.error(
             "Require exactly one {recordType} record for {fqdn}, but found {recordCount}.".format(
                 fqdn=Config.fqdn,
                 recordCount=recordCount,
                 recordType=recordType,
             )
         )
-        quit(4)
 
     update_record(value, records[0])
 
@@ -164,15 +161,22 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    while True:
-        try:
-            public_ipv4 = get_public_ipv4()
-            check_and_update_record("A", public_ipv4)
+    try:
+        while True:
+            try:
+                public_ipv4 = get_public_ipv4()
+                check_and_update_record("A", public_ipv4)
+            except Exception as e:
+                logger.error(f"Dynamic DNS update failed: {e}")
 
-            public_ipv6 = get_public_ipv6()
-            check_and_update_record("AAAA", public_ipv6)
+            if(Config.ip6_enable):
+                try:
+                    public_ipv6 = get_public_ipv6()
+                    check_and_update_record("AAAA", public_ipv6)
+                except Exception as e:
+                    logger.error(f"Dynamic DNS update failed: {e}")
 
-        except Exception as e:
-            print(f"Dynamic DNS update failed: {e}", flush=True)
+            time.sleep(20 * 60) # 20 minutes
 
-        time.sleep(20 * 60) # 20 minutes
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
