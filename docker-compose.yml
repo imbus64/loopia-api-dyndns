@@ -8,5 +8,6 @@ services:
       LOOPIA_API_USERNAME: sample@loopiaapi
       LOOPIA_API_PASSWORD: sample_pw
       LOOPIA_DOMAIN: sampledomain.se
-      LOOPIA_SUBDOMAIN: sub.sampledomain.se # '@' for root
+      LOOPIA_SUBDOMAIN: samplesub # '@' for root
+      LOOPIA_IP6_ENABLE: False 
     restart: unless-stopped
